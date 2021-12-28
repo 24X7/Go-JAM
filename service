@@ -1,0 +1,85 @@
+#!/usr/bin/env zx
+
+const [, , ,cmd] = process.argv 
+
+switch(cmd) {
+  case "dev":
+    await dev()
+    break
+  case "build":
+    await clean()
+    await build()
+    await makeDockerfile()
+    break      
+  case "start":
+    await start()
+    break    
+  case "start-macos":
+    await start_macos()
+    break   
+  case "kill":
+    await killAppOnPort(4000)
+    await killAppOnPort(4200)
+    await killAppOnPort(4100)
+    await killAppOnPort(3000)
+    break     
+}
+
+// *********************************************************************
+// Supporting functions below
+// *********************************************************************
+
+async function dev() {
+  await Promise.all([
+    $`cd ./app && npm run dev:ssr`,
+    $`PORT=${process.env.PORT || 3000} APP_PORT=4200 API_PORT=4100 go run main.go`,
+  ])
+}
+
+async function build() {
+  await Promise.all([
+    $`cd ./app && npm run build:ssr && cp -R ./dist ../.build && cp -R ./package.json ../.build && cd ../.build`,
+    $`GOOS=linux GOARCH=amd64 go build -o .build/svc-linux main.go`,
+    $`GOOS=darwin GOARCH=amd64 go build -o .build/svc-mac main.go`,
+  ])  
+}
+
+async function start_macos() {
+  await Promise.all([
+    $`cd ./.build && npm run serve:ssr`,
+    $`PORT=${process.env.PORT || 3000} APP_PORT=4000 API_PORT=4100 .build/svc-mac`,
+  ])
+
+  console.log(`Primary endpoint listening on port ${process.env.PORT || 3000}`)
+}
+
+async function start() {
+  await Promise.all([
+    $`cd ./.build && npm run serve:ssr`,
+    $`PORT=${process.env.PORT || 3000} APP_PORT=4000 API_PORT=4100 .build/svc-linux`,
+  ])
+
+  console.log(`Primary endpoint listening on port ${process.env.PORT || 3000}`)
+}
+
+async function makeDockerfile() {
+  const fileContents = `
+FROM node:17.3-alpine
+WORKDIR /usr/src/app
+COPY ./build/**/*.* ././build
+COPY ./service ./
+RUN npm install -g xz
+RUN chmod 777 ./service
+CMD [ "./service", "start" ]  
+  `
+
+  await fs.outputFile("./.build/Dockerfile", fileContents)
+}
+
+async function killAppOnPort(port) {
+  try { await $`lsof -t -i tcp:${port} | xargs kill` } catch{}
+}
+
+async function clean() {
+  await fs.remove("./.build")
+}
