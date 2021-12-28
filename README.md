@@ -1,4 +1,4 @@
-# Go-JAM 
+# Go-JAM(Stack)
 ## Cloud Run Service Teamplate w/ Angular Universal & Golang Fiber Backplane
 
 > This is a work in progress
