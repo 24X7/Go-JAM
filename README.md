@@ -10,6 +10,13 @@ Pretty simple proof of concept:
 
 Location build/dev server, and deployment (not done yet) handled through the file `./service`
 
+Setup Development Environment:
+1. Install golang (brew install golang)
+2. Install NodeJS w/ NPM (brew install node)
+3. Install `xz` as global (npm install -g xz)
+4. Install levelDB form google for development (brew install leveldb)
+5. chmod 777 ./service
+
 Key commands:
 1. `./service dev` (runs dev server)
 2. `./service build` (performs production build including generating a macos binary for local testing)
@@ -20,7 +27,7 @@ Key commands:
 
 *GCP Technologies:* Google Cloud Run, Google Secret Manager
 
-What is left?
+What is left for initial POC?
 1. Test building container
 2. Setup Secret Manager
 3. Switch the LevelDB store to use Google CLoud Storage
