@@ -40,7 +40,7 @@ async function build() {
     $`GOOS=darwin GOARCH=amd64 go build -o .build/svc-mac main.go`,
   ])  
 }
-
+  
 async function start_macos() {
   await Promise.all([
     $`PORT=${process.env.PORT || 3000} APP_PORT=1${process.env.PORT || 3000} API_PORT=2${process.env.PORT || 3000} .build/svc-mac`,
