@@ -1,4 +1,4 @@
-package backplane
+package app
 
 import (
 	"crypto/rand"
@@ -11,10 +11,8 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/fiber/v2/middleware/etag"
 	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/gofiber/fiber/v2/middleware/proxy"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
-	"github.com/workos-inc/workos-go/pkg/sso"
 
 	"github.com/philippgille/gokv"
 	"github.com/philippgille/gokv/encoding"
@@ -67,12 +65,7 @@ var isBootstrap bool = false
 
 func init() {
 	CONFIG = SystemConfig{
-		WORKOS_API_KEY:         os.Getenv("WORKOS_API_KEY"),
-		WORKOS_CLIENT_ID:       os.Getenv("WORKOS_CLIENT_ID"),
-		ALLOWED_ROOT_APP_USERS: os.Getenv("ALLOWED_ROOT_APP_USERS"),
-		PORT:                   os.Getenv("PORT"),
-		APP_PORT:               os.Getenv("APP_PORT"),
-		API_PORT:               os.Getenv("API_PORT"),
+		PORT: os.Getenv("PORT"),
 	}
 }
 
@@ -81,8 +74,6 @@ func Bootstrap() {
 		return
 	}
 	isBootstrap = true
-
-	sso.Configure(CONFIG.WORKOS_API_KEY, CONFIG.WORKOS_CLIENT_ID)
 
 	root := AppCreds{}
 	exist, err := GetAppAuthStore().Get("__ROOT__", &root)
@@ -176,7 +167,7 @@ func SetVal(opt BlobCallOptions, v *interface{}) error {
 func Run() {
 	config := fiber.Config{
 		Prefork:      true,
-		ServerHeader: "Honu.Works/services/backplane", // add custom server header
+		ServerHeader: "go-jam/services/app", // add custom server header
 	}
 
 	pathPrefix := "./.data/storage/"
@@ -189,30 +180,6 @@ func Run() {
 	service.Use(compress.New())
 
 	service.Use(basicauth.New(basicauth.Config{
-		Next: func(c *fiber.Ctx) bool {
-			Bootstrap()
-			if !strings.HasPrefix(c.Path(), "/api") {
-				return true
-			}
-			return false
-		},
-		Authorizer: func(user string, pass string) bool {
-			appCreds := new(AppCreds)
-			if len(user) > 0 && len(pass) > 0 {
-				GetAppAuthStore().Get(user, &appCreds)
-				if pass == appCreds.APIKey {
-					return true
-				}
-			}
-
-			return false
-		},
-	}))
-
-	api := fiber.New(config)
-	api.Use(recover.New())
-
-	api.Use(basicauth.New(basicauth.Config{
 		Next: func(c *fiber.Ctx) bool {
 			Bootstrap()
 			if strings.HasPrefix(c.Path(), "/api/app/new") {
@@ -233,7 +200,7 @@ func Run() {
 		},
 	}))
 
-	api.Get("/api/app/new", func(c *fiber.Ctx) error {
+	service.Get("/api/app/new", func(c *fiber.Ctx) error {
 		appcode := GenerateId("app", 32)
 		token := GenerateAuthToken()
 
@@ -248,20 +215,22 @@ func Run() {
 		return c.JSON(appData)
 	})
 
-	api.Get("/api/app/code/gen/token/:appcode", func(c *fiber.Ctx) error {
+	service.Get("/api/app/code/gen/token/:appcode", func(c *fiber.Ctx) error {
 		return c.SendStatus(200)
 	})
 
-	api.Get("/api/storage/:appcode/:contentType/:key", func(c *fiber.Ctx) error {
+	service.Get("/api/storage/:appcode/:contentType/:key", func(c *fiber.Ctx) error {
 		opt := GetCallOptionsFromCtx(c, pathPrefix)
 		v := new(interface{})
 		GetVal(opt, &v)
 		return c.JSON(v)
 	})
 
-	api.Post("/api/storage/:appcode/:contentType/:key", func(c *fiber.Ctx) error {
+	service.Post("/api/storage/:appcode/:contentType", func(c *fiber.Ctx) error {
 		opt := GetCallOptionsFromCtx(c, pathPrefix)
+		opt.Key = GenerateId(opt.ContentType, 32)
 		v := new(interface{})
+
 		if c.BodyParser(&v) == nil {
 			SetVal(opt, v)
 			return c.SendStatus(200)
@@ -270,39 +239,5 @@ func Run() {
 		return c.SendStatus(404)
 	})
 
-	/*--------------------------------------------------------------------------------
-
-		Context:   The workos SDK for Go seems to force one set of creds globally.
-		TODO:      Make this a separate program / process call
-
-	----------------------------------------------------------------------------------*/
-
-	api.Get("/api/auth/sign-up/:username/:email", func(c *fiber.Ctx) error {
-		return nil
-	})
-
-	api.Get("/api/auth/sign-in/start/:username/:email", func(c *fiber.Ctx) error {
-		return nil
-	})
-
-	api.Post("/api/auth/sign-in/complete/:code", func(c *fiber.Ctx) error {
-		return nil
-	})
-
-	// API Proxy
-	service.All("/api/**/*", proxy.Balancer(proxy.Config{
-		Servers: []string{
-			"http://localhost:" + CONFIG.API_PORT,
-		},
-	}))
-
-	// APP Proxy
-	service.All("/*", proxy.Balancer(proxy.Config{
-		Servers: []string{
-			"http://localhost:" + CONFIG.APP_PORT,
-		},
-	}))
-
-	go api.Listen(":" + CONFIG.API_PORT)
 	service.Listen(":" + CONFIG.PORT)
 }

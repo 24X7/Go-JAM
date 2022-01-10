@@ -1,7 +1,7 @@
 package main
 
-import "github.com/24X7/honu-works/backplane"
+import "github.com/24X7/GO-JAM/app"
 
 func main() {
-	backplane.Run()
+	app.Run()
 }

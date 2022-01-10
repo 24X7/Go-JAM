@@ -13,7 +13,8 @@
 .git
 .gitignore
 .data
-
+.build
+./service
 # Binaries for programs and plugins
 *.exe
 *.exe~

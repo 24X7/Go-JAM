@@ -18,11 +18,10 @@ switch(cmd) {
     await start_macos()
     break   
   case "kill":
-    await killAppOnPort(4000)
-    await killAppOnPort(4200)
-    await killAppOnPort(4100)
-    await killAppOnPort(3000)
-    break     
+    await killAppOnPort(parseInt(`${process.env.PORT || 3000}`))
+    break    
+  case "deploy":
+    await deploy()
 }
 
 // *********************************************************************
@@ -31,14 +30,12 @@ switch(cmd) {
 
 async function dev() {
   await Promise.all([
-    $`cd ./app && npm run dev:ssr`,
-    $`PORT=${process.env.PORT || 3000} APP_PORT=4200 API_PORT=4100 go run main.go`,
+    $`PORT=${process.env.PORT || 3000} APP_PORT=4000 API_PORT=4100 go run main.go`,
   ])
 }
 
 async function build() {
   await Promise.all([
-    $`cd ./app && npm install && npm run build:ssr && cp -R ./dist ../.build && cp -R ./package.json ../.build && cd ../.build`,
     $`GOOS=linux GOARCH=amd64 go build -o .build/svc-linux main.go`,
     $`GOOS=darwin GOARCH=amd64 go build -o .build/svc-mac main.go`,
   ])  
@@ -46,8 +43,7 @@ async function build() {
 
 async function start_macos() {
   await Promise.all([
-    $`cd ./.build && npm run serve:ssr`,
-    $`PORT=${process.env.PORT || 3000} APP_PORT=4000 API_PORT=4100 .build/svc-mac`,
+    $`PORT=${process.env.PORT || 3000} APP_PORT=1${process.env.PORT || 3000} API_PORT=2${process.env.PORT || 3000} .build/svc-mac`,
   ])
 
   console.log(`Primary endpoint listening on port ${process.env.PORT || 3000}`)
@@ -55,8 +51,7 @@ async function start_macos() {
 
 async function start() {
   await Promise.all([
-    $`cd ./.build && npm run serve:ssr`,
-    $`PORT=${process.env.PORT || 3000} APP_PORT=4000 API_PORT=4100 .build/svc-linux`,
+    $`PORT=${process.env.PORT || 3000} APP_PORT=1${process.env.PORT || 3000} API_PORT=2${process.env.PORT || 3000} .build/svc-linux`,
   ])
 
   console.log(`Primary endpoint listening on port ${process.env.PORT || 3000}`)
@@ -64,11 +59,10 @@ async function start() {
 
 async function makeDockerfile() {
   const fileContents = `
-FROM node:17.3-alpine
+FROM scratch
 WORKDIR /usr/src/app
 COPY ./build/**/*.* ././build
 COPY ./service ./
-RUN npm install -g xz
 RUN chmod 777 ./service
 CMD [ "./service", "start" ]  
   `
@@ -82,4 +76,8 @@ async function killAppOnPort(port) {
 
 async function clean() {
   await fs.remove("./.build")
+}
+
+async function deploy() {
+  await $`gcloud run deploy --source .`
 }
